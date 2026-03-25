@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+*.egg-info/
+dist/
+build/
+.env
+
+# Data and large files
+data/
+*.pickle
+*.pkl
+*.pt
+*.pth
+
+# Results that are auto-generated
+results/*.png
+results/*.csv
+results/*.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
