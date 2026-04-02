@@ -1,0 +1,13 @@
+# ── Dataset & hardware ───────────────────────────────
+dataset: "cifar10"        # cifar10 | cifar100 | ImageNet16-120
+hw_platform: "raspi4"     # edgegpu | raspi4 | edgetpu | pixel3 | eyeriss | fpga
+
+# ── Reproducibility ──────────────────────────────────
+seed: 42
+
+# ── Paths ───────────────────────────────────────────
+hw_nas_pickle: "HW-NAS-Bench/HW-NAS-Bench-v1_0.pickle"
+nas201_pth: "data/NAS-Bench-201-v1_1-096897.pth"
+
+# ── Search config ────────────────────────────────────
+n_evaluations: 500
