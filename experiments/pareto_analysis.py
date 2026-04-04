@@ -90,18 +90,33 @@ def pairwise_enrichment(pareto_indices, all_indices, loader):
         enrichment[pair] = freq_p / freq_all if freq_all > 0 else np.nan
     return enrichment
 
-def hv_contribution(df, pareto_indices):
-    """Compute normalized Hypervolume contributions per architecture."""
+# def hv_contribution(df, pareto_indices):
+#     """Compute normalized Hypervolume contributions per architecture."""
+#     objs = df.loc[pareto_indices, ["error_rate", "latency"]].values
+#     ref_point = np.max(df[["error_rate", "latency"]].values, axis=0) * 1.1
+#     hv_metric = HV(ref_point=ref_point)
+#     full_hv = hv_metric(objs)
+    
+#     contributions = []
+#     for i in range(len(objs)):
+#         subset = np.delete(objs, i, axis=0)
+#         hv_subset = hv_metric(subset)
+#         contributions.append(full_hv - hv_subset)
+#     contributions = np.array(contributions)
+#     contributions /= contributions.sum()
+#     return contributions
+
+def hv_contribution(df, pareto_indices, ref_point=None):
     objs = df.loc[pareto_indices, ["error_rate", "latency"]].values
-    ref_point = np.max(df[["error_rate", "latency"]].values, axis=0) * 1.1
+    if ref_point is None:
+        # Use only Pareto front to set reference, not full df
+        ref_point = np.max(objs, axis=0) * 1.1
     hv_metric = HV(ref_point=ref_point)
     full_hv = hv_metric(objs)
-    
     contributions = []
     for i in range(len(objs)):
         subset = np.delete(objs, i, axis=0)
-        hv_subset = hv_metric(subset)
-        contributions.append(full_hv - hv_subset)
+        contributions.append(full_hv - hv_metric(subset))
     contributions = np.array(contributions)
     contributions /= contributions.sum()
     return contributions

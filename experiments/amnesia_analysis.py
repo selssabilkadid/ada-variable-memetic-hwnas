@@ -1,43 +1,3 @@
-# import os
-# import pandas as pd
-# import numpy as np
-
-# from src.metaheuristic.regularised_evolution import RegularizedEvolutionTracker
-# from experiments.pareto_analysis import compute_pareto_front, hv_contribution
-
-# # Config
-# DATASET = "cifar10"
-# DEVICE = "edgegpu"
-# K = 10
-
-# BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# GROUND_TRUTH_DIR = os.path.join(BASE_DIR, "../ground_truth")
-
-# def main():
-#     folder = os.path.join(GROUND_TRUTH_DIR, DATASET, DEVICE)
-#     df = pd.read_csv(os.path.join(folder, "search_results.csv"))
-
-#     # Compute Pareto front
-#     df["error_rate"] = 1 - df["accuracy"]/100.0
-#     pareto_indices = compute_pareto_front(df)
-
-#     # Get "God architectures"
-#     contributions = hv_contribution(df, pareto_indices)
-#     top_k = np.argsort(-contributions)[:K]
-#     god_archs = [pareto_indices[i] for i in top_k]
-
-#     print("God architectures:", god_archs)
-
-#     # Run RE
-#     re = RegularizedEvolutionTracker(df, DEVICE)
-#     tracker, hv_history = re.run(cycles=500, god_archs=god_archs)
-
-#     print("\n=== Results ===")
-#     for g, stats in tracker.items():
-#         print(f"Arch {g}: rediscovery times = {stats['rediscovery_time']}")
-
-# if __name__ == "__main__":
-#     main()
 
 """
 experiments/amnesia_analysis.py
@@ -74,11 +34,15 @@ CYCLES         = 3000        # generations (enough for amnesia to manifest)
 POPULATION     = 50
 SAMPLE_SIZE    = 10
 LATENCY_COL    = "latency"   # column name in CSV
+SEEDS = 5 #how many times we run the amnesia tracker per device config
 
 BASE_DIR        = os.path.dirname(os.path.abspath(__file__))
 GROUND_TRUTH_DIR = os.path.join(BASE_DIR, "../ground_truth")
-OUTPUT_DIR      = os.path.join(BASE_DIR, "../outputs", "amnesia", DATASET, DEVICE)
+OUTPUT_DIR      = os.path.join(BASE_DIR, "../outputs", "amnesia", DATASET)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+DATASETS = ["cifar10"]            # list of datasets to analyze
+DEVICES = ["fpga", "edgegpu", "edgetpu", "raspi4", "pixel3", "eyeriss"]  
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -111,14 +75,28 @@ def load_df(dataset, device):
     return df
 
 
-def get_god_archs(df, k):
-    """Return arch_indices of top-K HV contributors on ground-truth Pareto front."""
-    pareto_indices = compute_pareto_front(df)
-    contributions  = hv_contribution(df, pareto_indices)
-    top_k          = np.argsort(-contributions)[:k]
-    god_archs      = [pareto_indices[i] for i in top_k]
-    god_contrib    = contributions[top_k]
-    return god_archs, god_contrib, pareto_indices
+# def get_god_archs(df, k):
+#     """Return arch_indices of top-K HV contributors on ground-truth Pareto front."""
+#     pareto_indices = compute_pareto_front(df)
+#     contributions  = hv_contribution(df, pareto_indices)
+#     top_k          = np.argsort(-contributions)[:k]
+#     god_archs      = [pareto_indices[i] for i in top_k]
+#     god_contrib    = contributions[top_k]
+#     return god_archs, god_contrib, pareto_indices
+
+def get_god_archs(df, k, min_accuracy=70.0):
+    df_valid = df[df["accuracy"] >= min_accuracy].copy()
+    pareto_indices = compute_pareto_front(df_valid)
+    
+    # Shared ref point — computed once, used everywhere
+    objs = df_valid.loc[pareto_indices, ["error_rate", "latency"]].values
+    ref_point = np.max(objs, axis=0) * 1.1
+    
+    contributions = hv_contribution(df_valid, pareto_indices, ref_point=ref_point)
+    top_k = np.argsort(-contributions)[:k]
+    god_archs = [pareto_indices[i] for i in top_k]
+    god_contrib = contributions[top_k]
+    return god_archs, god_contrib, pareto_indices, df_valid, ref_point
 
 
 def print_summary(tracker, god_archs, god_contrib):
@@ -153,16 +131,73 @@ def print_summary(tracker, god_archs, god_contrib):
     print(f"Never rediscovered       : {never_rediscovered}/{len(god_archs)}")
     print("="*60 + "\n")
 
+def save_summary_readable(tracker, god_archs, god_contrib, seed, device=DEVICE, dataset=DATASET):
+    """Save a human-readable summary (same content as print_summary) to TXT."""
 
-def save_results(tracker, hv_history, eviction_events, god_archs, god_contrib):
+    lines = []
+    lines.append("\n" + "="*60)
+    lines.append(f"AMNESIA TRACKER SUMMARY - RUN NUMBER {seed} ON {dataset}/{device} ")
+    lines.append("="*60)
+
+    total_evictions = 0
+    total_hv_lost = 0.0
+    never_rediscovered = 0
+
+    for g, contrib in zip(god_archs, god_contrib):
+        t = tracker[g]
+        n_evictions = len(t["eviction_gen"])
+        total_evictions += n_evictions
+
+        hv_lost = sum(t["hv_drop"])
+        total_hv_lost += hv_lost
+
+        gaps = t["rediscovery_gap"]
+
+        if n_evictions > 0 and len(gaps) < n_evictions:
+            never_rediscovered += 1
+
+        lines.append(f"\nArch {g:6d}  (HV contrib={contrib:.3f})")
+        lines.append(f"  First discovered : gen {t['first_discovery_gen']}")
+        lines.append(f"  Evictions        : {n_evictions}  at gens {t['eviction_gen']}")
+        lines.append(f"  HV drops         : {[f'{h:.4f}' for h in t['hv_drop']]}")
+
+        never_flag = (
+            " ← NEVER REDISCOVERED"
+            if n_evictions > 0 and len(gaps) < n_evictions
+            else ""
+        )
+        lines.append(f"  Rediscovery gaps : {gaps}{never_flag}")
+
+    lines.append("\n" + "-"*60)
+    lines.append(f"Total god-arch evictions : {total_evictions}")
+    lines.append(f"Total HV lost to amnesia : {total_hv_lost:.4f}")
+    lines.append(f"Never rediscovered       : {never_rediscovered}/{len(god_archs)}")
+    lines.append("="*60 + "\n")
+
+    # ── Save to same directory as JSON ────────────────────────────────
+    device_dir = os.path.join(OUTPUT_DIR, device)
+    os.makedirs(device_dir, exist_ok=True)
+
+    path = os.path.join(device_dir, "re_summary_readable.txt")
+
+    # Append if exists (same behavior as your JSON function)
+    mode = "a" if os.path.exists(path) else "w"
+
+    with open(path, mode, encoding="utf-8") as f:
+        f.write("\n".join(lines))
+
+    print(f"[Saved readable summary] {path}")
+
+def save_results(tracker, hv_history, eviction_events, god_archs, god_contrib, seed, device=DEVICE):
     """Persist results as JSON for reproducibility."""
     results = {
         "config": {
             "dataset": DATASET,
-            "device": DEVICE,
+            "device": device,
             "cycles": CYCLES,
             "population": POPULATION,
             "k": K,
+            "seed": seed
         },
         "god_archs": [
             {"arch_index": int(g), "hv_contribution": float(c)}
@@ -180,8 +215,14 @@ def save_results(tracker, hv_history, eviction_events, god_archs, god_contrib):
         "eviction_events": eviction_events,
         "hv_history": hv_history,
     }
-    path = os.path.join(OUTPUT_DIR, "amnesia_results.json")
-    with open(path, "w") as f:
+    device_dir = os.path.join(OUTPUT_DIR, device)
+    os.makedirs(device_dir, exist_ok=True)
+    path = os.path.join(device_dir, f"amnesia_results.json")
+    if os.path.exists(path):
+        mode="a"
+    else:
+        mode="w"    
+    with open(path, mode) as f:
         json.dump(results, f, indent=2)
     print(f"[Saved] {path}")
 
@@ -303,73 +344,146 @@ def plot_rediscovery_gaps(tracker, god_archs):
     plt.close(fig)
     print(f"[Saved] {path}")
 
+    def compute_amnesia_hv_loss(self, tracker, hv_history):
+        """
+        For each god architecture, sum the HV drops during the periods
+        when the architecture was not alive (i.e., between death and rediscovery).
+        """
+        amnesia_scores = {}
+        for arch_idx, t in tracker.items():
+            drops = []
+            last_alive = t["first_discovery_gen"]
+            for death_gen, gap_hv_drop in zip(t["eviction_gen"], t["hv_drop"]):
+                # HV loss accumulated from death until next rediscovery
+                # Approximate: sum of HV drops until next discovery
+                rediscoveries = t["rediscovery_gap"] + [0]  # add 0 for last gap if missing
+                gap_idx = t["rediscovery_gap"].index(min(t["rediscovery_gap"])) if t["rediscovery_gap"] else 0
+                drops.append(sum(hv_history[death_gen:death_gen + rediscoveries[gap_idx]]))
+            amnesia_scores[arch_idx] = sum(drops)
+        return amnesia_scores
 
 # ── Global tracker reference for plotting helper ──────────────────────────────
 tracker_global = {}
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
-
 def main():
     global tracker_global
+    for device in DEVICES:
+        print(f"[Config] dataset={DATASET}, device={device}, "
+              f"K={K}, cycles={CYCLES}, pop={POPULATION}")
 
-    print(f"[Config] dataset={DATASET}, device={DEVICE}, "
-          f"K={K}, cycles={CYCLES}, pop={POPULATION}")
+        # 1. Load data
+        df = load_df(DATASET, device)
+        print(f"    {len(df)} architectures loaded.")
 
-    # 1. Load data
-    print("\n[1] Loading data...")
-    df = load_df(DATASET, DEVICE)
-    print(f"    {len(df)} architectures loaded.")
+        # 2. Identify god architectures
+        god_archs, god_contrib, pareto_indices, df_valid, ref_point = get_god_archs(df, K)
 
-    # 2. Identify god architectures from ground-truth Pareto front
-    print("\n[2] Computing god architectures...")
-    god_archs, god_contrib, pareto_indices = get_god_archs(df, K)
-    print(f"    Pareto front size : {len(pareto_indices)}")
-    print(f"    God archs         : {god_archs}")
-    for g, c in zip(god_archs, god_contrib):
-        print(f"      Arch {g:6d} — HV contribution = {c:.4f}")
+        # Instantiate loader **before** passing to RE
+        loader = HWNASLoader()
 
-    # 3. Run RE with amnesia tracker
-    print(f"\n[3] Running RE ({CYCLES} cycles)...")
-    loader = HWNASLoader()
-    re = RegularizedEvolutionTracker(
-        df, loader, DEVICE,
-        population_size=POPULATION,
-        sample_size=SAMPLE_SIZE
-    )
-    # tracker, hv_history, eviction_events = re.run(
-    #     cycles=CYCLES,
-    #     god_archs=god_archs
-    # )
-    # tracker_global = tracker
+        # 3. Create RE instance
+        re = RegularizedEvolutionTracker(
+            df_valid, loader, device,
+            population_size=POPULATION,
+            sample_size=SAMPLE_SIZE,
+            ref_point=ref_point
+        )
 
-    # 4. Print summary
-    # print_summary(tracker, god_archs, god_contrib)
-    
-    # Wrap main RE run in a loop
-    SEEDS = 5
-    discoveries = {g: 0 for g in god_archs}
-    for seed in range(SEEDS):
-        random.seed(seed)
-        np.random.seed(seed)
-        tracker, hv_history, eviction_events = re.run(cycles=CYCLES, god_archs=god_archs)
-        for g in god_archs:
-            if tracker[g]["first_discovery_gen"] is not None:
-                discoveries[g] += 1
-        print_summary(tracker, god_archs, god_contrib)
-    print({g: f"{discoveries[g]}/{SEEDS} runs" for g in god_archs})
+        print(f"    Pareto front size : {len(pareto_indices)}")
+        print(f"    God archs         : {god_archs}")
+        for g, c in zip(god_archs, god_contrib):
+            print(f"      Arch {g:6d} — HV contribution = {c:.4f}")
 
-    # # 5. Save results
-    # print("[5] Saving results...")
-    # save_results(tracker, hv_history, eviction_events, god_archs, god_contrib)
+        # 4. Run RE
+        discoveries = {g: 0 for g in god_archs}
+        for seed in range(SEEDS):
+            re.reset()
+            random.seed(seed)
+            np.random.seed(seed)
+            tracker, hv_history, eviction_events = re.run(cycles=CYCLES, god_archs=god_archs)
+            for g in god_archs:
+                if tracker[g]["first_discovery_gen"] is not None:
+                    discoveries[g] += 1
+            print_summary(tracker, god_archs, god_contrib)
+            save_summary_readable(tracker, god_archs, god_contrib, seed, device)
 
-    # # 6. Plots
-    # print("[6] Generating plots...")
-    # plot_hv_with_evictions(hv_history, eviction_events, tracker, god_archs)
-    # plot_eviction_hv_drops(eviction_events, god_archs, god_contrib)
-    # plot_rediscovery_gaps(tracker, god_archs)
+        print({g: f"{discoveries[g]}/{SEEDS} runs" for g in god_archs})
+        
+# def main():
+#     global tracker_global
+#     for device in DEVICES:      
+#         print(f"[Config] dataset={DATASET}, device={device}, "
+#             f"K={K}, cycles={CYCLES}, pop={POPULATION}")
 
-    # print(f"\n[Done] All outputs saved to: {OUTPUT_DIR}")
+#         # 1. Load data
+#         print("\n[1] Loading data...")
+#         df = load_df(DATASET, device)
+#         print(f"    {len(df)} architectures loaded.")
+
+#         # 2. Identify god architectures from ground-truth Pareto front
+#         print("\n[2] Computing god architectures...")
+#         # god_archs, god_contrib, pareto_indices = get_god_archs(df, K)
+#         god_archs, god_contrib, pareto_indices, df_valid, ref_point = get_god_archs(df, K)
+
+#         re = RegularizedEvolutionTracker(
+#                 df_valid, loader, device,
+#                 population_size=POPULATION,
+#                 sample_size=SAMPLE_SIZE,
+#                 ref_point=ref_point        # add this parameter
+#         )
+#         print(f"    Pareto front size : {len(pareto_indices)}")
+#         print(f"    God archs         : {god_archs}")
+#         for g, c in zip(god_archs, god_contrib):
+#             print(f"      Arch {g:6d} — HV contribution = {c:.4f}")
+
+#         # 3. Run RE with amnesia tracker
+#         print(f"\n[3] Running RE ({CYCLES} cycles)...")
+#         loader = HWNASLoader()
+#         re = RegularizedEvolutionTracker(
+#             df, loader, device,
+#             population_size=POPULATION,
+#             sample_size=SAMPLE_SIZE
+#         )
+#         # tracker, hv_history, eviction_events = re.run(
+#         #     cycles=CYCLES,
+#         #     god_archs=god_archs
+#         # )
+#         # tracker_global = tracker
+
+#         # 4. Print summary
+#         # print_summary(tracker, god_archs, god_contrib)
+        
+#         # Wrap main RE run in a loop
+#         discoveries = {g: 0 for g in god_archs}
+#         for seed in range(SEEDS):
+#             re.reset()
+#             random.seed(seed)
+#             np.random.seed(seed)
+#             tracker, hv_history, eviction_events = re.run(cycles=CYCLES, god_archs=god_archs)
+#             for g in god_archs:
+#                 if tracker[g]["first_discovery_gen"] is not None:
+#                     discoveries[g] += 1
+#             print_summary(tracker, god_archs, god_contrib)
+#             # amnesia_scores = re.compute_amnesia_hv_loss(tracker, hv_history)
+#             # for arch, hv_loss in amnesia_scores.items():
+#             #     print(f"God Arch {arch}: Total HV Loss during rediscovery = {hv_loss:.4f}")
+#             # save_results(tracker, hv_history,eviction_events,god_archs,god_contrib,seed,device)
+#             save_summary_readable(tracker, god_archs, god_contrib, seed, device)
+#         print({g: f"{discoveries[g]}/{SEEDS} runs" for g in god_archs})
+
+#     # # 5. Save results
+#     # print("[5] Saving results...")
+#     # save_results(tracker, hv_history, eviction_events, god_archs, god_contrib)
+
+#     # # 6. Plots
+#     # print("[6] Generating plots...")
+#     # plot_hv_with_evictions(hv_history, eviction_events, tracker, god_archs)
+#     # plot_eviction_hv_drops(eviction_events, god_archs, god_contrib)
+#     # plot_rediscovery_gaps(tracker, god_archs)
+
+#     # print(f"\n[Done] All outputs saved to: {OUTPUT_DIR}")
 
 
 if __name__ == "__main__":

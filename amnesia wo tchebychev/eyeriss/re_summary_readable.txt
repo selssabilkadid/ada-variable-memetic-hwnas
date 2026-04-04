@@ -1,0 +1,350 @@
+
+============================================================
+AMNESIA TRACKER SUMMARY - RUN NUMBER 0 ON cifar10/eyeriss 
+============================================================
+
+Arch   7690  (HV contrib=0.907)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch  14465  (HV contrib=0.023)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch  10689  (HV contrib=0.018)
+  First discovered : gen 2879
+  Evictions        : 1  at gens [2929]
+  HV drops         : ['0.0299']
+  Rediscovery gaps : [] ← NEVER REDISCOVERED
+
+Arch   7373  (HV contrib=0.015)
+  First discovered : gen 1943
+  Evictions        : 1  at gens [1993]
+  HV drops         : ['0.0362']
+  Rediscovery gaps : [] ← NEVER REDISCOVERED
+
+Arch   2952  (HV contrib=0.015)
+  First discovered : gen 1169
+  Evictions        : 1  at gens [1219]
+  HV drops         : ['0.1587']
+  Rediscovery gaps : [] ← NEVER REDISCOVERED
+
+Arch   1459  (HV contrib=0.006)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   6925  (HV contrib=0.005)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   9930  (HV contrib=0.003)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   5111  (HV contrib=0.003)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   4099  (HV contrib=0.002)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+------------------------------------------------------------
+Total god-arch evictions : 3
+Total HV lost to amnesia : 0.2248
+Never rediscovered       : 3/10
+============================================================
+
+============================================================
+AMNESIA TRACKER SUMMARY - RUN NUMBER 1 ON cifar10/eyeriss 
+============================================================
+
+Arch   7690  (HV contrib=0.907)
+  First discovered : gen 974
+  Evictions        : 1  at gens [1074]
+  HV drops         : ['0.0011']
+  Rediscovery gaps : [] ← NEVER REDISCOVERED
+
+Arch  14465  (HV contrib=0.023)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch  10689  (HV contrib=0.018)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   7373  (HV contrib=0.015)
+  First discovered : gen 30
+  Evictions        : 3  at gens [130, 778, 795]
+  HV drops         : ['0.0006', '0.0000', '0.0438']
+  Rediscovery gaps : [548] ← NEVER REDISCOVERED
+
+Arch   2952  (HV contrib=0.015)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   1459  (HV contrib=0.006)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   6925  (HV contrib=0.005)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   9930  (HV contrib=0.003)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   5111  (HV contrib=0.003)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   4099  (HV contrib=0.002)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+------------------------------------------------------------
+Total god-arch evictions : 4
+Total HV lost to amnesia : 0.0456
+Never rediscovered       : 2/10
+============================================================
+
+============================================================
+AMNESIA TRACKER SUMMARY - RUN NUMBER 2 ON cifar10/eyeriss 
+============================================================
+
+Arch   7690  (HV contrib=0.907)
+  First discovered : gen 1946
+  Evictions        : 4  at gens [2096, 2203, 2249, 2304]
+  HV drops         : ['0.0000', '0.0000', '0.0000', '0.0011']
+  Rediscovery gaps : [3] ← NEVER REDISCOVERED
+
+Arch  14465  (HV contrib=0.023)
+  First discovered : gen 1345
+  Evictions        : 5  at gens [1495, 1570, 2410, 2572, 2623]
+  HV drops         : ['0.0000', '0.0003', '0.0038', '0.0000', '0.0015']
+  Rediscovery gaps : [690, 12] ← NEVER REDISCOVERED
+
+Arch  10689  (HV contrib=0.018)
+  First discovered : gen 715
+  Evictions        : 2  at gens [865, 1950]
+  HV drops         : ['0.0051', '0.0117']
+  Rediscovery gaps : [935] ← NEVER REDISCOVERED
+
+Arch   7373  (HV contrib=0.015)
+  First discovered : gen 1221
+  Evictions        : 1  at gens [1371]
+  HV drops         : ['0.0396']
+  Rediscovery gaps : [1572]
+
+Arch   2952  (HV contrib=0.015)
+  First discovered : gen 2632
+  Evictions        : 1  at gens [2782]
+  HV drops         : ['0.1554']
+  Rediscovery gaps : [] ← NEVER REDISCOVERED
+
+Arch   1459  (HV contrib=0.006)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   6925  (HV contrib=0.005)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   9930  (HV contrib=0.003)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   5111  (HV contrib=0.003)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   4099  (HV contrib=0.002)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+------------------------------------------------------------
+Total god-arch evictions : 13
+Total HV lost to amnesia : 0.2185
+Never rediscovered       : 4/10
+============================================================
+
+============================================================
+AMNESIA TRACKER SUMMARY - RUN NUMBER 3 ON cifar10/eyeriss 
+============================================================
+
+Arch   7690  (HV contrib=0.907)
+  First discovered : gen 395
+  Evictions        : 4  at gens [595, 1591, 1772, 1851]
+  HV drops         : ['0.0011', '0.0000', '0.0000', '0.0015']
+  Rediscovery gaps : [796, 60] ← NEVER REDISCOVERED
+
+Arch  14465  (HV contrib=0.023)
+  First discovered : gen 1863
+  Evictions        : 1  at gens [2063]
+  HV drops         : ['0.0009']
+  Rediscovery gaps : [] ← NEVER REDISCOVERED
+
+Arch  10689  (HV contrib=0.018)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   7373  (HV contrib=0.015)
+  First discovered : gen 1675
+  Evictions        : 5  at gens [93, 1875, 2309, 2390, 2807]
+  HV drops         : ['0.0009', '0.0006', '0.0000', '0.0219', '0.0006']
+  Rediscovery gaps : [1582, 234, 217, 111] ← NEVER REDISCOVERED
+
+Arch   2952  (HV contrib=0.015)
+  First discovered : gen 1598
+  Evictions        : 1  at gens [1798]
+  HV drops         : ['0.1104']
+  Rediscovery gaps : [] ← NEVER REDISCOVERED
+
+Arch   1459  (HV contrib=0.006)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   6925  (HV contrib=0.005)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   9930  (HV contrib=0.003)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   5111  (HV contrib=0.003)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   4099  (HV contrib=0.002)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+------------------------------------------------------------
+Total god-arch evictions : 11
+Total HV lost to amnesia : 0.1379
+Never rediscovered       : 4/10
+============================================================
+
+============================================================
+AMNESIA TRACKER SUMMARY - RUN NUMBER 4 ON cifar10/eyeriss 
+============================================================
+
+Arch   7690  (HV contrib=0.907)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch  14465  (HV contrib=0.023)
+  First discovered : gen 1985
+  Evictions        : 2  at gens [2235, 2306]
+  HV drops         : ['0.0000', '0.0040']
+  Rediscovery gaps : [465] ← NEVER REDISCOVERED
+
+Arch  10689  (HV contrib=0.018)
+  First discovered : gen 738
+  Evictions        : 1  at gens [988]
+  HV drops         : ['0.0094']
+  Rediscovery gaps : [1834]
+
+Arch   7373  (HV contrib=0.015)
+  First discovered : gen 2592
+  Evictions        : 2  at gens [118, 2842]
+  HV drops         : ['0.0006', '0.0006']
+  Rediscovery gaps : [2474] ← NEVER REDISCOVERED
+
+Arch   2952  (HV contrib=0.015)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   1459  (HV contrib=0.006)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   6925  (HV contrib=0.005)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   9930  (HV contrib=0.003)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   5111  (HV contrib=0.003)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+Arch   4099  (HV contrib=0.002)
+  First discovered : gen None
+  Evictions        : 0  at gens []
+  HV drops         : []
+  Rediscovery gaps : []
+
+------------------------------------------------------------
+Total god-arch evictions : 5
+Total HV lost to amnesia : 0.0147
+Never rediscovered       : 2/10
+============================================================

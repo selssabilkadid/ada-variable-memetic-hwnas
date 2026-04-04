@@ -14,6 +14,7 @@ HW-NAS-Bench/
 HW-NAS-Bench/dev/
 HW-NAS-Bench/hw_nas_bench_api
 HW-NAS-Bench/nas_201_api
+amnesia wo tchebychev
 
 *.pickle
 *.pkl
