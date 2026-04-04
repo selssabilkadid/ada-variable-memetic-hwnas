@@ -182,6 +182,7 @@ def save_summary_readable(tracker, god_archs, god_contrib, seed, device=DEVICE, 
 
     # Append if exists (same behavior as your JSON function)
     mode = "a" if os.path.exists(path) else "w"
+    # mode = "w"
 
     with open(path, mode, encoding="utf-8") as f:
         f.write("\n".join(lines))
