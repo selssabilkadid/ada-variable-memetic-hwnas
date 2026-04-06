@@ -1,0 +1,19 @@
+# run_configs/random_baseline.yaml
+
+experiment:
+  name: random_search
+  seed: 42
+  n_evals: 500
+
+data:
+  dataset: cifar10
+
+hardware:
+  platform: raspi4
+
+paths:
+  hw_pickle: HW-NAS-Bench/HW-NAS-Bench-v1_0.pickle
+  nasbench_pth: data/NAS-Bench-201-v1_1-096897.pth
+
+output:
+  dir: results/
