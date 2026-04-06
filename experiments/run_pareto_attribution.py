@@ -65,34 +65,71 @@ def build_feature_names(n_ops: int, op_choices: list[str]) -> list[str]:
     return [f"op{i}_{op}" for i in range(n_ops) for op in op_choices]
 
 
+# def add_derived_features(
+#     X_onehot: np.ndarray,
+#     op_choices: list[str],
+# ) -> tuple[np.ndarray, list[str]]:
+#     """
+#     Append two summary features per architecture:
+#       - none_count : number of pruned edges  (proxy for sparsity / low latency)
+#       - conv_count : number of conv edges    (proxy for representational capacity)
+
+#     These help the model capture coarse architectural patterns that
+#     individual one-hot columns express only in scattered form,
+#     preventing the 'none' op from dominating purely through repetition.
+#     """
+#     n_ops      = X_onehot.shape[1] // len(op_choices)
+#     none_idx   = op_choices.index("none")
+#     conv_idxs  = [i for i, op in enumerate(op_choices) if "conv" in op]
+#     conv1_idxs = [i for i, op in enumerate(op_choices) if "1x1" in op]
+#     conv3_idxs = [i for i, op in enumerate(op_choices) if "3x3" in op]
+#     skip_idx = [i for i, op in enumerate(op_choices) if "skip" in op]
+#     pool_idx = [i for i, op in enumerate(op_choices) if "pool" in op]
+    
+
+#     # Slice every len(op_choices)-th column starting at the op's position
+#     none_cols  = X_onehot[:, none_idx::len(op_choices)]          # (N, n_ops)
+#     conv_cols  = np.stack(
+#         [X_onehot[:, ci::len(op_choices)] for ci in conv_idxs], axis=-1
+#     ).sum(axis=-1)                                                 # (N, n_ops)
+    
+
+#     none_count = none_cols.sum(axis=1, keepdims=True)
+#     conv_count = conv_cols.sum(axis=1, keepdims=True)
+
+#     X_aug           = np.hstack([X_onehot, none_count, conv_count])
+#     extra_names     = ["derived_none_count", "derived_conv_count"]
+#     return X_aug, extra_names
+
 def add_derived_features(
     X_onehot: np.ndarray,
     op_choices: list[str],
 ) -> tuple[np.ndarray, list[str]]:
     """
-    Append two summary features per architecture:
-      - none_count : number of pruned edges  (proxy for sparsity / low latency)
-      - conv_count : number of conv edges    (proxy for representational capacity)
+    Append one count feature per operation type in op_choices.
+    Each derived feature represents how many edges in the architecture
+    use that operation — a coarse summary that helps the model capture
+    global architectural patterns beyond scattered one-hot columns.
 
-    These help the model capture coarse architectural patterns that
-    individual one-hot columns express only in scattered form,
-    preventing the 'none' op from dominating purely through repetition.
+    Example derived features for the default OP_CHOICES:
+      - derived_none_count        (sparsity / low-latency proxy)
+      - derived_skip_connect_count
+      - derived_nor_conv_1x1_count
+      - derived_nor_conv_3x3_count
+      - derived_avg_pool_3x3_count (capacity proxy)
     """
-    n_ops      = X_onehot.shape[1] // len(op_choices)
-    none_idx   = op_choices.index("none")
-    conv_idxs  = [i for i, op in enumerate(op_choices) if "conv" in op]
+    n_cols = len(op_choices)
 
-    # Slice every len(op_choices)-th column starting at the op's position
-    none_cols  = X_onehot[:, none_idx::len(op_choices)]          # (N, n_ops)
-    conv_cols  = np.stack(
-        [X_onehot[:, ci::len(op_choices)] for ci in conv_idxs], axis=-1
-    ).sum(axis=-1)                                                 # (N, n_ops)
+    # For each op at position op_idx, its one-hot columns in the flat vector
+    # are at indices: op_idx, op_idx + n_cols, op_idx + 2*n_cols, ...
+    # Summing across those columns gives the count of that op in the arch.
+    op_counts = np.stack(
+        [X_onehot[:, op_idx::n_cols].sum(axis=1) for op_idx in range(n_cols)],
+        axis=1,
+    )  # shape: (N, len(op_choices))
 
-    none_count = none_cols.sum(axis=1, keepdims=True)
-    conv_count = conv_cols.sum(axis=1, keepdims=True)
-
-    X_aug           = np.hstack([X_onehot, none_count, conv_count])
-    extra_names     = ["derived_none_count", "derived_conv_count"]
+    extra_names = [f"derived_{op}_count" for op in op_choices]
+    X_aug = np.hstack([X_onehot, op_counts])
     return X_aug, extra_names
 
 
@@ -136,7 +173,7 @@ def save_results(results: dict, output_dir: str) -> None:
                 for rank, i in enumerate(top_idx)
             ],
         }
-    out_path = os.path.join(output_dir, "attribution_summary.json")
+    out_path = os.path.join(output_dir, "attribution_summary_position.json")
     with open(out_path, "w") as f:
         json.dump(summary, f, indent=2)
     print(f"\n[✓] Results saved → {out_path}")
@@ -173,15 +210,19 @@ def process_search_results(
     # ---------------------------------------------------------------- #
     # 2. Build feature matrix                                            #
     #    One-hot encoded ops  +  derived summary features               #
-    #    ← no HW metrics used as features (avoids circular leakage)     #
     # ---------------------------------------------------------------- #
     all_ops  = [get_arch_ops(loader, idx) for idx in arch_indices]
     n_ops    = len(all_ops[0])
     X_onehot = np.stack([encode_ops_onehot(ops, OP_CHOICES) for ops in all_ops])
+    X=X_onehot
 
-    X, extra_names = add_derived_features(X_onehot, OP_CHOICES)
-    feature_names  = build_feature_names(n_ops, OP_CHOICES) + extra_names
-    print(f"Feature matrix: {X.shape}  ({n_ops} ops × {len(OP_CHOICES)} choices + {len(extra_names)} derived)")
+    # X, extra_names = add_derived_features(X_onehot, OP_CHOICES)
+    # feature_names  = build_feature_names(n_ops, OP_CHOICES) + extra_names  # all 35 names
+    feature_names  = build_feature_names(n_ops, OP_CHOICES)   # all 35 names
+    # count_cols     = [name for name in feature_names if name.startswith("derived_")]  # 5 names
+
+    print(f"Feature matrix: {X.shape}  ({n_ops} ops × {len(OP_CHOICES)} choices +  derived)")
+    print(X)
 
     # ---------------------------------------------------------------- #
     # 3. Objectives                                                      #
@@ -211,6 +252,11 @@ def process_search_results(
     # ---------------------------------------------------------------- #
     sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
     idx_train, idx_test = next(sss.split(X, pareto_mask.astype(int)))
+
+    # X_train = pd.DataFrame(X[idx_train], columns=feature_names)[count_cols]
+    # X_test  = pd.DataFrame(X[idx_test],  columns=feature_names)[count_cols]
+    # X_df    = pd.DataFrame(X,            columns=feature_names)[count_cols]
+    
     X_train = pd.DataFrame(X[idx_train], columns=feature_names)
     X_test  = pd.DataFrame(X[idx_test],  columns=feature_names)
     X_df    = pd.DataFrame(X,            columns=feature_names)
@@ -228,6 +274,7 @@ def process_search_results(
     rng    = np.random.default_rng(42)
     bg_idx = rng.choice(len(X), size=min(SHAP_BACKGROUND_SIZE, len(X)), replace=False)
     X_bg   = pd.DataFrame(X[bg_idx], columns=feature_names)
+    # X_bg = pd.DataFrame(X[bg_idx], columns=feature_names)[count_cols]
 
     # ---------------------------------------------------------------- #
     # 7. Train one model per objective, evaluate, compute SHAP          #
@@ -262,12 +309,17 @@ def process_search_results(
         print(f"  Top 10 SHAP features:")
         for rank, fi in enumerate(top_idx, 1):
             print(f"    {rank:2d}. {feature_names[fi]:<30s}  importance={importance[fi]:.6f}")
+        
+        # print(f"  Top 10 SHAP features:")
+        # for rank, fi in enumerate(top_idx, 1):
+        #     print(f"    {rank:2d}. {count_cols[fi]:<30s}  importance={importance[fi]:.6f}")
 
         results[label] = {
             "model":        model,
             "shap_values":  shap_vals,
             "importance":   importance,
             "feature_names": feature_names,
+            # "feature_names": count_cols,
             "r2_test":      r2,
         }
 
