@@ -1,0 +1,19 @@
+dataset,hw_platform,HV% NSGA-II,HV% NSGA-II-FH,Cov% NSGA-II,Cov% NSGA-II-FH
+ImageNet16-120,edgegpu,98.89,98.89,7.69,7.69
+ImageNet16-120,edgetpu,99.61,99.61,33.33,33.33
+ImageNet16-120,eyeriss,98.22,98.22,0.0,0.0
+ImageNet16-120,fpga,98.64,98.64,0.0,0.0
+ImageNet16-120,pixel3,98.87,98.87,10.81,10.81
+ImageNet16-120,raspi4,98.7,98.7,9.38,9.38
+cifar10,edgegpu,99.64,99.64,13.04,13.04
+cifar10,edgetpu,99.91,99.91,0.0,0.0
+cifar10,eyeriss,99.7,99.7,0.0,0.0
+cifar10,fpga,99.66,99.66,9.52,14.29
+cifar10,pixel3,99.69,99.69,21.62,21.62
+cifar10,raspi4,99.65,99.65,9.3,9.3
+cifar100,edgegpu,98.5,98.5,0.0,0.0
+cifar100,edgetpu,99.28,99.28,14.29,14.29
+cifar100,eyeriss,98.1,98.1,0.0,0.0
+cifar100,fpga,98.12,98.12,0.0,0.0
+cifar100,pixel3,97.87,97.87,9.09,9.09
+cifar100,raspi4,98.56,98.56,17.65,17.65
