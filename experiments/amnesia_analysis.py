@@ -84,6 +84,10 @@ def load_df(dataset, device):
 #     god_contrib    = contributions[top_k]
 #     return god_archs, god_contrib, pareto_indices
 
+def get_optimal_archs(df, k):
+    sorted_df = df.sort_values("accuracy", ascending=False)
+    return sorted_df.head(k)["arch_index"].tolist()
+
 def get_god_archs(df, k, min_accuracy=70.0):
     df_valid = df[df["accuracy"] >= min_accuracy].copy()
     pareto_indices = compute_pareto_front(df_valid)
