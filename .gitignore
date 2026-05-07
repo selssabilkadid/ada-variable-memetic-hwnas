@@ -26,6 +26,9 @@ amnesia-wo-tchebychev/
 results/*.png
 results/*.csv
 results/*.json
+outputs/
+results_moenas_tfpsi/
+results/
 
 # IDE
 .vscode/
@@ -33,3 +36,5 @@ results/*.json
 
 # OS
 .DS_Store
+
+.pytest_cache

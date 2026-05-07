@@ -11,7 +11,7 @@ Usage
 from src.metaheuristic.memetic_nsga2 import run_memetic
 
 results = run_memetic(
-    nb201_loader=nb201_loader,
+    nb201_loader=nb201_loader, 
     hw_loader=hw_loader,
     pareto_indices_by_device=gt_pareto_indices,   # dict[device -> arch_index array]
     dataset="cifar10",
