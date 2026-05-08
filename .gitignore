@@ -23,9 +23,7 @@ amnesia-wo-tchebychev/
 *.pth
 
 # Results that are auto-generated
-results/*.png
-results/*.csv
-results/*.json
+results/
 
 # IDE
 .vscode/
