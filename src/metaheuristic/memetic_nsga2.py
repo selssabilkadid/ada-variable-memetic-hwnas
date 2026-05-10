@@ -1,19 +1,29 @@
 # src/metaheuristic/memetic_nsga2.py
 """
-Memetic NSGA-II: vanilla NSGA-II (nsgai2.py) + KL-guided local search.
+Memetic NSGA-II: custom NSGA-II (src/metaheuristic/nsga2/core/nsga2.py)
++ uniform random local search applied to the rank-0 front after each generation.
 
-The only structural change vs. the baseline is that after each generation's
-survivor selection we call apply_local_search() on the rank-1 front before
-advancing to the next generation.
+Local search is neighbourhood-based and operator-agnostic:
+  for each rank-0 individual, generate K neighbours by changing one randomly
+  chosen gene to a uniformly-sampled different value, then accept the
+  neighbour if it strictly dominates the current individual.
+
+Two runners call this module:
+
+  run_memetic_nsga2.py (Contribution 2 — plain memetic):
+      run_memetic(...) with default adaptive_mutation=None
+
+  run_adaptive_memetic_nsga2.py (Contribution 3 — memetic + UCB1):
+      run_memetic(..., adaptive_mutation={"initial_probs": ..., "update_period": ...})
 
 Usage
 -----
 from src.metaheuristic.memetic_nsga2 import run_memetic
 
+# Plain memetic (uniform local search only)
 results = run_memetic(
-    nb201_loader=nb201_loader, 
+    nb201_loader=nb201_loader,
     hw_loader=hw_loader,
-    pareto_indices_by_device=gt_pareto_indices,   # dict[device -> arch_index array]
     dataset="cifar10",
     hw_platform="raspi4",
     pop_size=50,
@@ -22,257 +32,259 @@ results = run_memetic(
     seed=42,
     verbose=True,
 )
+
+# Adaptive memetic (uniform local search + UCB1 operator selection)
+results = run_memetic(
+    nb201_loader=nb201_loader,
+    hw_loader=hw_loader,
+    dataset="cifar10",
+    hw_platform="raspi4",
+    pop_size=50,
+    n_gen=20,
+    K=4,
+    seed=42,
+    verbose=True,
+    adaptive_mutation={
+        "initial_probs": np.array([0.33, 0.33, 0.34]),
+        "update_period": 5,
+    },
+)
 """
 
 from __future__ import annotations
-import sys
 import os
+import sys
 import numpy as np
-from pymoo.algorithms.moo.nsga2 import NSGA2
-from pymoo.core.callback import Callback
-from pymoo.operators.crossover.sbx import SBX
-from pymoo.operators.mutation.pm import PM
-from pymoo.operators.repair.rounding import RoundingRepair
-from pymoo.operators.sampling.rnd import IntegerRandomSampling
-from pymoo.optimize import minimize
-from pymoo.termination import get_termination
+from typing import List, Optional
 
-# Add project root to Python path so 'src' is findable
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 sys.path.insert(0, PROJECT_ROOT)
 
-from metaheuristic.local_search import (
-    apply_local_search,
-    compute_kl_weights,
-    index_to_ops,
-)
-
-# Re-use the problem definition from the baseline — no changes needed there
-from metaheuristic.nsga2 import HWNASProblem
+from src.metaheuristic.nsga2.core.nsga2 import NSGA2
+from src.metaheuristic.nsga2.core.individual import Individual
+from src.benchmark.hwnas_problem_def import HWNASProblem
 
 
+# --------------------------------------------------------------------------- #
+# Uniform random local search callback
+# --------------------------------------------------------------------------- #
 
-# ---------------------------------------------------------------------------
-# Callback: inject local search after each generation
-# ---------------------------------------------------------------------------
-
-class KLLocalSearchCallback(Callback):
+class UniformLocalSearchCallback:
     """
-    pymoo Callback that runs KL-guided local search on the rank-1 front
-    after every generation's survivor selection step.
+    Callable passed to NSGA2.run(callback=...).
 
-    The callback has access to `algorithm.pop` (the current population)
-    and mutates it in-place before pymoo advances to the next generation.
+    Called every generation as ``callback(gen, population)`` after
+    survivor selection, so every Individual already has a valid ``.rank``.
+
+    For each rank-0 individual:
+      - generate K neighbours, each differing in exactly one randomly
+        chosen gene (new value sampled uniformly from the remaining choices)
+      - greedily accept a neighbour if it strictly dominates the incumbent
+        (Pareto dominance: ≤ on all objectives, < on at least one)
+      - move to the accepted neighbour before generating the next one,
+        so improvements compound within the K-budget
     """
 
     def __init__(
         self,
-        nb201_loader,
-        hw_loader,
-        dataset: str,
-        device: str,
-        kl_weights: dict,
+        problem,
+        num_choices: np.ndarray,
         K: int,
         seed: int,
-    ):
-        super().__init__()
-        self.nb201_loader = nb201_loader
-        self.hw_loader    = hw_loader
-        self.dataset      = dataset
-        self.device       = device
-        self.kl_weights   = kl_weights
-        self.K            = K
-        self.rng          = np.random.default_rng(seed)
+    ) -> None:
+        self.problem     = problem
+        self.num_choices = np.asarray(num_choices, dtype=int)
+        self.K           = K
+        self.rng         = np.random.RandomState(seed)
+        self.total_evals = 0
 
-        # Shared evaluation cache — persists across all generations
-        self.eval_cache: dict = {}
-        self.total_new_evals  = 0
+    def __call__(self, gen: int, population: List[Individual]) -> None:
+        front0 = [ind for ind in population if ind.rank == 0]
 
-    def notify(self, algorithm, **kwargs):
-        """Called by pymoo after each generation."""
-        pop = algorithm.pop
+        for ind in front0:
+            best_vars = ind.decision_vars.copy()
+            best_obj  = ind.objectives.copy()
 
-        # --- Extract arch indices and objectives from pymoo population ----
-        arch_matrix  = pop.get("X").astype(int)          # (pop_size, 1)
-        population_F = pop.get("F").astype(float)         # (pop_size, 2)
+            for _ in range(self.K):
+                # Pick a gene to perturb
+                gene = self.rng.randint(0, len(best_vars))
+                nc   = int(self.num_choices[gene])
+                if nc <= 1:
+                    continue
 
-        # --- Identify rank-1 (non-dominated) solutions --------------------
-        # pymoo stores rank in the "rank" attribute after non-dominated sort.
-        # Rank 0 in pymoo = rank 1 in NSGA-II literature.
-        ranks = pop.get("rank")
-        if ranks is None:
-            # Fallback: shouldn't happen after survivor selection, but guard
-            return
+                # Sample any value other than the current one (uniform)
+                old     = int(best_vars[gene])
+                others  = [v for v in range(nc) if v != old]
+                new_val = int(self.rng.choice(others))
 
-        front_indices = np.where(ranks == 0)[0]
+                neighbour_vars       = best_vars.copy()
+                neighbour_vars[gene] = new_val
 
-        if len(front_indices) == 0:
-            return
+                neighbour_obj = np.asarray(
+                    self.problem.evaluate(neighbour_vars), dtype=float
+                )
+                self.total_evals += 1
 
-        # --- Apply local search -------------------------------------------
-        new_arch_matrix, new_population_F, n_new = apply_local_search(
-            front_indices    = front_indices,
-            arch_matrix      = arch_matrix,
-            population_F     = population_F,
-            eval_cache       = self.eval_cache,
-            nb201_loader     = self.nb201_loader,
-            hw_loader        = self.hw_loader,
-            dataset          = self.dataset,
-            device           = self.device,
-            kl_weights       = self.kl_weights,
-            K                = self.K,
-            rng              = self.rng,
-        )
+                # Accept if neighbour strictly dominates current best
+                if (np.all(neighbour_obj <= best_obj)
+                        and np.any(neighbour_obj < best_obj)):
+                    best_vars = neighbour_vars
+                    best_obj  = neighbour_obj
 
-        self.total_new_evals += n_new
-
-        # --- Write improvements back into the pymoo population ------------
-        # pymoo Individual objects are mutable; update X and F in-place.
-        for i, ind in enumerate(pop):
-            ind.set("X", new_arch_matrix[i])
-            ind.set("F", new_population_F[i])
+            # Write improvements back into the Individual in-place
+            ind.decision_vars = best_vars
+            ind.objectives    = best_obj
 
 
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- #
+# Population snapshot callback (captures last-generation population for F)
+# --------------------------------------------------------------------------- #
+
+class _PopulationSnapshot:
+    """Thin wrapper so two callbacks can be chained from a single callable."""
+
+    def __init__(self, local_search: UniformLocalSearchCallback) -> None:
+        self._ls  = local_search
+        self.last_population: List[Individual] = []
+
+    def __call__(self, gen: int, population: List[Individual]) -> None:
+        self._ls(gen, population)
+        self.last_population = population   # reference, updated each gen
+
+
+# --------------------------------------------------------------------------- #
 # Main entry point
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- #
 
 def run_memetic(
     nb201_loader,
     hw_loader,
-    pareto_indices_by_device: dict,
-    dataset: str       = "cifar10",
-    hw_platform: str   = "raspi4",
-    pop_size: int      = 50,
-    n_gen: int         = 20,
-    K: int             = 4,
-    seed: int          = 42,
-    verbose: bool      = True,
+    dataset: str                        = "cifar10",
+    hw_platform: str                    = "raspi4",
+    pop_size: int                       = 50,
+    n_gen: int                          = 20,
+    K: int                              = 4,
+    seed: int                           = 42,
+    verbose: bool                       = True,
+    weights_dir: Optional[str]          = None,        # accepted but unused
+    adaptive_mutation: Optional[dict]   = None,        # None → plain memetic
 ) -> dict:
     """
-    Run Memetic NSGA-II (NSGA-II + KL-guided local search).
+    Run Memetic NSGA-II (custom NSGA-II + uniform random local search).
 
     Parameters
     ----------
-    nb201_loader             : NASBench201CSVLoader
-    hw_loader                : HWNASLoader
-    pareto_indices_by_device : dict { device -> np.ndarray of arch_index }
-        Used to compute KL weights in the pre-search step.
-        Pass ground-truth Pareto front indices, or indices from a warm run.
-    dataset                  : one of ["cifar10", "cifar100", "ImageNet16-120"]
-    hw_platform              : hardware target, e.g. "raspi4"
-    pop_size                 : NSGA-II population size
-    n_gen                    : number of generations
-    K                        : local search neighbourhood budget (new evals only)
-    seed                     : random seed
-    verbose                  : print per-generation progress
+    nb201_loader      : NASBench201CSVLoader
+    hw_loader         : HWNASLoader
+    dataset           : one of ["cifar10", "cifar100", "ImageNet16-120"]
+    hw_platform       : hardware target, e.g. "raspi4"
+    pop_size          : NSGA-II population size
+    n_gen             : number of generations
+    K                 : local search budget — max neighbours evaluated per
+                        rank-0 individual per generation
+    seed              : random seed
+    verbose           : print per-generation progress
+    weights_dir       : ignored (kept for runner back-compatibility)
+    adaptive_mutation : if None  → plain memetic (Contribution 2)
+                        if dict  → passed to NSGA2 to enable UCB1 operator
+                                   selection (Contribution 3).
+                        Expected keys: "initial_probs", "update_period".
 
     Returns
     -------
-    dict with keys matching nsgai2.run() plus:
-        "total_ls_evals"  : total new evaluations spent in local search
-        "kl_weights"      : the per-device KL weight vectors used
+    dict with keys:
+        pareto_X        : 1-D array of row indices for Pareto-front solutions
+        pareto_acc      : 1-D array of accuracy values
+        pareto_lat      : 1-D array of latency values
+        F               : (N, 2) objectives array for the full final population
+        edge_weights    : uniform weight vector (1/n_edges each); placeholder
+                          returned so the experiment runner can save it without
+                          changes
+        total_ls_evals  : total new evaluations spent in local search
     """
 
-    # ------------------------------------------------------------------
-    # Pre-search: compute KL weights
-    # ------------------------------------------------------------------
-    print(f"[Memetic] Computing KL weights for device={hw_platform} ...")
-    kl_weights = compute_kl_weights(pareto_indices_by_device)
-
-    if verbose:
-        w = kl_weights[hw_platform]
-        print(f"[Memetic] KL weights (edges 0-5): "
-              f"{', '.join(f'e{i}={v:.4f}' for i, v in enumerate(w))}")
-
-    # ------------------------------------------------------------------
+    # ------------------------------------------------------------------ #
     # Problem
-    # ------------------------------------------------------------------
+    # ------------------------------------------------------------------ #
     problem = HWNASProblem(
-        nb201_loader=nb201_loader,
-        hw_loader=hw_loader,
-        dataset=dataset,
-        hw_platform=hw_platform,
+        acc_loader = nb201_loader,
+        hw_loader  = hw_loader,
+        dataset    = dataset,
+        platform   = hw_platform,
     )
 
-    # ------------------------------------------------------------------
-    # Callback
-    # ------------------------------------------------------------------
-    callback = KLLocalSearchCallback(
-        nb201_loader = nb201_loader,
-        hw_loader    = hw_loader,
-        dataset      = dataset,
-        device       = hw_platform,
-        kl_weights   = kl_weights,
-        K            = K,
-        seed         = seed + 1,   # offset from main seed to avoid correlation
+    # ------------------------------------------------------------------ #
+    # Local search callback
+    # ------------------------------------------------------------------ #
+    ls_callback = UniformLocalSearchCallback(
+        problem     = problem,
+        num_choices = problem.num_choices,
+        K           = K,
+        seed        = seed + 1,   # offset from main seed
+    )
+    snapshot = _PopulationSnapshot(ls_callback)
+
+    # ------------------------------------------------------------------ #
+    # Algorithm
+    # ------------------------------------------------------------------ #
+    mode_label = "Adaptive" if adaptive_mutation is not None else "Plain"
+    algo = NSGA2(
+        problem           = problem,
+        pop_size          = pop_size,
+        n_var             = problem.n_var,
+        n_obj             = problem.n_obj,
+        num_choices       = problem.num_choices,
+        seed              = seed,
+        prob_crossover    = 0.9,
+        adaptive_mutation = adaptive_mutation,   # None or UCB1 config dict
     )
 
-    # ------------------------------------------------------------------
-    # Algorithm  (identical operator set as baseline)
-    # ------------------------------------------------------------------
-    algorithm = NSGA2(
-        pop_size  = pop_size,
-        sampling  = IntegerRandomSampling(),
-        crossover = SBX(prob=0.9, eta=15, vtype=float, repair=RoundingRepair()),
-        mutation  = PM(prob=1.0 / problem.n_var, eta=20,
-                       vtype=float, repair=RoundingRepair()),
-        eliminate_duplicates = True,
-        callback  = callback,
-    )
-
-    # ------------------------------------------------------------------
-    # Run
-    # ------------------------------------------------------------------
     print(
-        f"[Memetic NSGA2] Starting | dataset={dataset}  hw={hw_platform}  "
-        f"pop={pop_size}  gen={n_gen}  K={K}  seed={seed}"
+        f"[Memetic NSGA-II | {mode_label}] Starting | dataset={dataset}  "
+        f"hw={hw_platform}  pop={pop_size}  gen={n_gen}  K={K}  seed={seed}"
     )
 
-    result = minimize(
-        problem,
-        algorithm,
-        get_termination("n_gen", n_gen),
-        seed    = seed,
-        verbose = verbose,
+    pareto_set, pareto_front = algo.run(
+        generations = n_gen,
+        verbose     = verbose,
+        callback    = snapshot,
     )
 
-    # ------------------------------------------------------------------
-    # Extract results  (same shape contract as nsgai2.run)
-    # ------------------------------------------------------------------
-    X = result.pop.get("X").flatten().astype(int)
-    F = result.pop.get("F")
+    # ------------------------------------------------------------------ #
+    # Unpack results
+    # ------------------------------------------------------------------ #
+    pareto_acc = -pareto_front[:, 0]
+    pareto_lat =  pareto_front[:, 1]
 
-    pareto_X   = result.opt.get("X").flatten().astype(int)
-    pareto_F   = result.opt.get("F")
-    pareto_acc = -pareto_F[:, 0]
-    pareto_lat =  pareto_F[:, 1]
+    # Full population objectives for scatter plot
+    F = np.array([ind.objectives for ind in snapshot.last_population])
+
+    # Row-number index (no benchmark index available from custom NSGA-II)
+    pareto_X = np.arange(len(pareto_acc))
+
+    # Uniform placeholder weights (6 NASBench-201 edges)
+    n_edges      = 6
+    edge_weights = np.full(n_edges, 1.0 / n_edges)
 
     if verbose:
         best_acc_idx = pareto_acc.argmax()
         best_lat_idx = pareto_lat.argmin()
-        print(f"\n[Memetic NSGA2] Done -- Pareto front size: {len(pareto_X)}")
+        print(f"\n[Memetic NSGA-II | {mode_label}] Done -- Pareto front size: {len(pareto_X)}")
         print(
             f"  Best accuracy : {pareto_acc[best_acc_idx]:.2f}%  "
-            f"(arch={pareto_X[best_acc_idx]}, lat={pareto_lat[best_acc_idx]:.3f} ms)"
+            f"lat={pareto_lat[best_acc_idx]:.3f} ms"
         )
         print(
             f"  Best latency  : {pareto_lat[best_lat_idx]:.3f} ms  "
-            f"(arch={pareto_X[best_lat_idx]}, acc={pareto_acc[best_lat_idx]:.2f}%)"
+            f"acc={pareto_acc[best_lat_idx]:.2f}%"
         )
-        print(
-            f"  Local search new evals: {callback.total_new_evals}  "
-            f"(cached hits not counted)"
-        )
+        print(f"  Local search new evals: {ls_callback.total_evals}")
 
     return {
-        "result":          result,
-        "X":               X,
-        "F":               F,
-        "pareto_X":        pareto_X,
-        "pareto_F":        pareto_F,
-        "pareto_acc":      pareto_acc,
-        "pareto_lat":      pareto_lat,
-        "total_ls_evals":  callback.total_new_evals,
-        "kl_weights":      kl_weights,
+        "pareto_X":       pareto_X,
+        "pareto_acc":     pareto_acc,
+        "pareto_lat":     pareto_lat,
+        "F":              F,
+        "edge_weights":   edge_weights,
+        "total_ls_evals": ls_callback.total_evals,
     }
