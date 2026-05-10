@@ -1,6 +1,6 @@
-# experiments/run_memetic_nsga2.py
+# experiments/run_variable_memetic_nsga2.py
 """
-Experiment runner for Memetic NSGA-II (Contribution 2).
+Experiment runner for Variance-Guided Memetic NSGA-II (Contribution 2).
 
 Mirrors run_nsga2.py exactly in structure: same datasets, same devices,
 same metrics, same output layout.
@@ -10,14 +10,14 @@ by running: python src/utils/variance_weights.py --dataset <dataset>).
 
 Output layout
 -------------
-results/results_memetic_nsga2/
+results/results_variable_memetic_nsga2/
   <dataset>/
     <device>/
-      memetic_nsga2_front.csv      # arch_index, accuracy, latency
-      comparison.png               # scatter + metrics bar (vs ground truth)
-      edge_weights.csv             # variance weights used for this device
+      variable_memetic_nsga2_front.csv   # arch_index, accuracy, latency
+      comparison.png                     # scatter + metrics bar (vs ground truth)
+      edge_weights.csv                   # variance weights used for this device
 
-results/results_memetic_nsga2/ablation/
+results/results_variable_memetic_nsga2/ablation/
   <dataset>/
     <device>/
       ablation_K.csv               # K, hv_ratio, gd, igd for each K
@@ -119,7 +119,7 @@ def run_single(
     K: int,
     output_dir: str,
 ) -> dict:
-    """Run memetic NSGA-II for one (dataset, device, K) combination."""
+    """Run variance-guided memetic NSGA-II for one (dataset, device, K) combination."""
 
     results = run_memetic(
         nb201_loader = nb201_loader,
@@ -132,6 +132,7 @@ def run_single(
         seed         = 42,
         verbose      = True,
         weights_dir  = WEIGHTS_DIR,
+        # adaptive_mutation=None → plain variance-guided mode (Contribution 2)
     )
 
     os.makedirs(output_dir, exist_ok=True)
@@ -145,7 +146,7 @@ def run_single(
         "latency":    results["pareto_lat"],
     })
     df_pareto.to_csv(
-        os.path.join(output_dir, "memetic_nsga2_front.csv"), index=False
+        os.path.join(output_dir, "variable_memetic_nsga2_front.csv"), index=False
     )
 
     # ------------------------------------------------------------------
@@ -177,6 +178,7 @@ def run_single(
     # ------------------------------------------------------------------
     # Plot
     # ------------------------------------------------------------------
+    # F layout from updated run_memetic: col 0 = -accuracy, col 1 = latency
     df_all = pd.DataFrame({
         "latency":  results["F"][:, 1],
         "accuracy": -results["F"][:, 0],
@@ -184,7 +186,7 @@ def run_single(
     df_pareto_sorted = df_pareto.sort_values("latency")
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
-    fig.suptitle(f"Memetic NSGA-II | {dataset} | {device} | K={K}")
+    fig.suptitle(f"Variance-Guided Memetic NSGA-II | {dataset} | {device} | K={K}")
 
     ax1.scatter(df_all["latency"], df_all["accuracy"],
                 alpha=0.3, label="Population")
@@ -193,8 +195,8 @@ def run_single(
     if df_gt is not None:
         ax1.plot(df_gt["latency"], df_gt["accuracy"],
                  "k--o", label="True Pareto")
-    ax1.set_xlabel("Latency")
-    ax1.set_ylabel("Accuracy")
+    ax1.set_xlabel("Latency (ms)")
+    ax1.set_ylabel("Accuracy (%)")
     ax1.legend()
 
     if df_gt is not None:
@@ -279,7 +281,7 @@ def main(run_ablation_flag: bool = False):
 
     for dataset in DATASETS:
         for device in DEVICES:
-            print(f"\n=== Memetic NSGA-II | dataset={dataset} device={device} ===")
+            print(f"\n=== Variance-Guided Memetic NSGA-II | dataset={dataset} device={device} ===")
 
             if run_ablation_flag:
                 ablation_dir = os.path.join(
@@ -294,7 +296,7 @@ def main(run_ablation_flag: bool = False):
                 )
             else:
                 output_dir = os.path.join(
-                    BASE_DIR, "../results/results_memetic_nsga2",
+                    BASE_DIR, "../results/results_variable_memetic_nsga2",
                     dataset, device,
                 )
                 metrics = run_single(
