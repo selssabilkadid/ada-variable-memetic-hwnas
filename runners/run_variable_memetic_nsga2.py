@@ -2,8 +2,8 @@
 """
 Experiment runner for Variance-Guided Memetic NSGA-II (Contribution 2).
 
-Mirrors run_nsga2.py exactly in structure: same datasets, same devices,
-same metrics, same output layout.
+Mirrors run_memetic_nsga2.py exactly in structure: same datasets, same devices,
+same metrics (evaluation/metrics.py), same output layout.
 
 Variance weights are loaded from data/variance_weights/ (precomputed once
 by running: python src/utils/variance_weights.py --dataset <dataset>).
@@ -36,64 +36,14 @@ sys.path.insert(0, PROJECT_ROOT)
 from src.benchmark.nasbench201csv_loader import NASBench201CSVLoader
 from src.benchmark.hwnas_loader import HWNASLoader
 from src.metaheuristic.variable_memetic_nsga2 import run_memetic
+from src.evaluation.metrics import compute_metrics
 
 BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
 WEIGHTS_DIR = os.path.join(PROJECT_ROOT, "data", "variance_weights")
 
-# ------------------------------------------------------------------ #
-# Metrics (identical to run_nsga2.py)
-# ------------------------------------------------------------------ #
-
-def hypervolume_2d(front_arr: np.ndarray, ref_point: tuple) -> float:
-    pts = np.column_stack([-front_arr[:, 0], front_arr[:, 1]])
-    ref = np.array([-ref_point[0], ref_point[1]])
-    pts = pts[np.argsort(pts[:, 0])]
-    hv, prev_y = 0.0, ref[1]
-    for pt in pts:
-        if pt[1] < prev_y:
-            hv += (ref[0] - pt[0]) * (prev_y - pt[1])
-            prev_y = pt[1]
-    return hv
-
-
-def normalize(arr, vmin, vmax):
-    return (arr - vmin) / (vmax - vmin + 1e-8)
-
-
-def gd(approx, true):
-    return np.mean([np.min(np.linalg.norm(true - pt, axis=1)) for pt in approx])
-
-
-def igd(approx, true):
-    return np.mean([np.min(np.linalg.norm(approx - pt, axis=1)) for pt in true])
-
-
-def compute_metrics(approx_front, true_front):
-    all_acc = np.concatenate([approx_front[:, 0], true_front[:, 0]])
-    all_lat = np.concatenate([approx_front[:, 1], true_front[:, 1]])
-    margin  = 0.05
-    ref = (
-        np.min(all_acc) - margin * abs(np.min(all_acc)),
-        np.max(all_lat) + margin * abs(np.max(all_lat)),
-    )
-    hv_true   = hypervolume_2d(true_front, ref)
-    hv_approx = hypervolume_2d(approx_front, ref)
-    hv_ratio  = hv_approx / hv_true * 100 if hv_true > 0 else 0.0
-    vmin = np.array([np.min(all_acc), np.min(all_lat)])
-    vmax = np.array([np.max(all_acc), np.max(all_lat)])
-    approx_n = normalize(approx_front, vmin, vmax)
-    true_n   = normalize(true_front,   vmin, vmax)
-    return {
-        "hv_true": hv_true, "hv_approx": hv_approx, "hv_ratio": hv_ratio,
-        "gd":  gd(approx_n, true_n),
-        "igd": igd(approx_n, true_n),
-        "front_size_true":   len(true_front),
-        "front_size_approx": len(approx_front),
-    }
-
 
 # ------------------------------------------------------------------ #
-# Ground-truth loader (only used for evaluation, NOT for weights)
+# Ground-truth loader
 # ------------------------------------------------------------------ #
 
 def load_gt(dataset: str, device: str) -> pd.DataFrame | None:
@@ -105,6 +55,29 @@ def load_gt(dataset: str, device: str) -> pd.DataFrame | None:
         print(f"[OK] Ground truth loaded ({len(df)} pts)")
         return df
     return None
+
+
+# ------------------------------------------------------------------ #
+# Bar chart helper — values on top of each bar
+# ------------------------------------------------------------------ #
+
+def _bar_with_values(ax, x, values, width, label, color=None, offset=0.0):
+    """Draw a bar group and annotate each bar with its value on top."""
+    bars = ax.bar(
+        x + offset, values, width,
+        label = label,
+        color = color,
+        alpha = 0.85,
+    )
+    for bar, val in zip(bars, values):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2.0,
+            bar.get_height() + 0.5,
+            f"{val:.2f}",
+            ha       = "center",
+            va       = "bottom",
+            fontsize = 7,
+        )
 
 
 # ------------------------------------------------------------------ #
@@ -158,14 +131,11 @@ def run_single(
     )
 
     # ------------------------------------------------------------------
-    # Load ground truth (for evaluation only)
+    # Ground truth + metrics
     # ------------------------------------------------------------------
-    df_gt = load_gt(dataset, device)
-
-    # ------------------------------------------------------------------
-    # Metrics
-    # ------------------------------------------------------------------
+    df_gt   = load_gt(dataset, device)
     metrics = {"hv_ratio": 0.0, "gd": 0.0, "igd": 0.0}
+
     if df_gt is not None:
         approx  = df_pareto[["accuracy", "latency"]].values
         true    = df_gt[["accuracy", "latency"]].values
@@ -178,7 +148,6 @@ def run_single(
     # ------------------------------------------------------------------
     # Plot
     # ------------------------------------------------------------------
-    # F layout from updated run_memetic: col 0 = -accuracy, col 1 = latency
     df_all = pd.DataFrame({
         "latency":  results["F"][:, 1],
         "accuracy": -results["F"][:, 0],
@@ -188,6 +157,7 @@ def run_single(
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
     fig.suptitle(f"Variance-Guided Memetic NSGA-II | {dataset} | {device} | K={K}")
 
+    # --- Left panel ---
     ax1.scatter(df_all["latency"], df_all["accuracy"],
                 alpha=0.3, label="Population")
     ax1.plot(df_pareto_sorted["latency"], df_pareto_sorted["accuracy"],
@@ -199,14 +169,24 @@ def run_single(
     ax1.set_ylabel("Accuracy (%)")
     ax1.legend()
 
+    # --- Right panel: bars with values on top ---
     if df_gt is not None:
         names  = ["HV (%)", "GD×100", "IGD×100"]
-        values = [metrics["hv_ratio"],
-                  metrics["gd"]  * 100,
-                  metrics["igd"] * 100]
-        ax2.bar(names, values)
-        ax2.axhline(100, linestyle="--", color="black")
+        values = [
+            metrics["hv_ratio"],
+            metrics["gd"]  * 100,
+            metrics["igd"] * 100,
+        ]
+        x     = np.arange(len(names))
+        width = 0.5
+        _bar_with_values(ax2, x, values, width,
+                         label="Variance-Guided Memetic",
+                         color="tab:blue", offset=0.0)
+        ax2.set_xticks(x)
+        ax2.set_xticklabels(names)
+        ax2.axhline(100, linestyle="--", color="black", linewidth=0.8)
         ax2.set_title("Metrics vs Ground Truth")
+        ax2.legend(fontsize=8)
     else:
         ax2.axis("off")
 
@@ -214,6 +194,7 @@ def run_single(
     plt.savefig(os.path.join(output_dir, "comparison.png"))
     plt.close()
 
+    print(f"[OK] Results saved → {output_dir}")
     return metrics
 
 
@@ -233,10 +214,8 @@ def run_ablation(
     for K in K_values:
         print(f"\n--- Ablation K={K} | {dataset} | {device} ---")
         metrics = run_single(
-            nb201_loader,
-            hw_loader,
-            dataset,
-            device,
+            nb201_loader, hw_loader,
+            dataset, device,
             K          = K,
             output_dir = os.path.join(ablation_dir, f"K{K}"),
         )
@@ -254,6 +233,16 @@ def run_ablation(
         ["HV ratio (%)", "GD (normalised)", "IGD (normalised)"],
     ):
         ax.plot(df_abl["K"], df_abl[col], marker="o")
+        # Annotate each point with its value
+        for k_val, metric_val in zip(df_abl["K"], df_abl[col]):
+            ax.annotate(
+                f"{metric_val:.3f}",
+                xy         = (k_val, metric_val),
+                xytext     = (0, 6),
+                textcoords = "offset points",
+                ha         = "center",
+                fontsize   = 8,
+            )
         ax.set_xlabel("K")
         ax.set_ylabel(label)
         ax.set_title(label)
@@ -262,7 +251,7 @@ def run_ablation(
     plt.tight_layout()
     plt.savefig(os.path.join(ablation_dir, "ablation_K.png"))
     plt.close()
-    print(f"[OK] Ablation saved -> {ablation_dir}")
+    print(f"[OK] Ablation saved → {ablation_dir}")
 
 
 # ------------------------------------------------------------------ #
