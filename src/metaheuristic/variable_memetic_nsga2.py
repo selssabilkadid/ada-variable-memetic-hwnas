@@ -3,8 +3,7 @@
 Memetic NSGA-II: custom NSGA-II (src/metaheuristic/nsga2/core/nsga2.py)
 + variance-guided local search applied to the rank-0 front after each generation.
 
-Identical in structure to memetic_nsga2.py (same custom NSGA-II baseline,
-same callable callback pattern, same adaptive_mutation hook), but replaces
+Identical in structure to memetic_nsga2.py  but replaces
 the uniform-random gene selection in the local search with variance-weighted
 edge-priority selection:
 
@@ -19,48 +18,6 @@ edge-priority selection:
 Edge weights are precomputed offline via:
     python src/utils/variance_weights.py --dataset cifar10
 and loaded from data/variance_weights/weights_<device>_<dataset>.npy.
-
-Two runners call this module:
-
-  run_variable_memetic_nsga2.py (plain variance-guided memetic):
-      run_memetic(...) with default adaptive_mutation=None
-
-  run_adaptive_variable_memetic_nsga2.py (variance-guided + UCB1):
-      run_memetic(..., adaptive_mutation={"initial_probs": ..., "update_period": ...})
-
-Usage
------
-from src.metaheuristic.variable_memetic_nsga2 import run_memetic
-
-# Plain variance-guided memetic
-results = run_memetic(
-    nb201_loader=nb201_loader,
-    hw_loader=hw_loader,
-    dataset="cifar10",
-    hw_platform="raspi4",
-    pop_size=50,
-    n_gen=20,
-    K=4,
-    seed=42,
-    verbose=True,
-)
-
-# Variance-guided memetic + adaptive mutation (UCB1)
-results = run_memetic(
-    nb201_loader=nb201_loader,
-    hw_loader=hw_loader,
-    dataset="cifar10",
-    hw_platform="raspi4",
-    pop_size=50,
-    n_gen=20,
-    K=4,
-    seed=42,
-    verbose=True,
-    adaptive_mutation={
-        "initial_probs": np.array([0.33, 0.33, 0.34]),
-        "update_period": 5,
-    },
-)
 """
 
 from __future__ import annotations

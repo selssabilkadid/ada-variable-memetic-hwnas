@@ -6,7 +6,7 @@ from src.evaluation.metrics import compute_pareto_front
 
 class RandomSearch:
     """
-    Baseline: pure random search over the HW-NAS-Bench search space.
+    pure random search over the HW-NAS-Bench search space.
     Every metaheuristic you implement should match this interface.
     """
 

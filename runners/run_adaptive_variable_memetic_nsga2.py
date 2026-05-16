@@ -1,14 +1,6 @@
 # experiments/run_adaptive_variable_memetic_nsga2.py
 """
-Experiment runner for Adaptive Variance-Guided Memetic NSGA-II (Contribution 3).
-
-Identical in structure to run_variable_memetic_nsga2.py (same datasets, same
-devices, same metrics, same output layout), with one addition: UCB1 adaptive
-operator selection is enabled by passing ``adaptive_mutation`` to run_memetic().
-
-UCB1 selects among the three mutation operators at each generation based on
-their historical reward (hypervolume improvement), trading off exploration
-and exploitation via an upper-confidence-bound criterion.
+Experiment runner for Adaptive Variance-Guided Memetic NSGA-II .
 
 Output layout
 -------------
@@ -114,7 +106,7 @@ def run_single(
         dataset           = dataset,
         hw_platform       = device,
         pop_size          = 50,
-        n_gen             = 20,
+        n_gen             = 50,
         K                 = K,
         seed              = 42,
         verbose           = True,

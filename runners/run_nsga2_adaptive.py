@@ -2,9 +2,6 @@
 """
 Experiment runner for NSGA-II (baseline + adaptive).
 
-Mirrors run_memetic_nsga2.py exactly in structure: same datasets, same
-devices, same metrics, same output layout, same evaluation/metrics.py usage.
-
 Output layout
 -------------
 results/results_nsga2/
@@ -48,7 +45,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATASETS = ["cifar10", "cifar100", "ImageNet16-120"]
 DEVICES  = ["fpga", "edgegpu", "edgetpu", "raspi4", "pixel3", "eyeriss"]
 
-POP_SIZE    = 100
+POP_SIZE    = 50
 GENERATIONS = 50
 SEED        = 42
 
@@ -117,9 +114,6 @@ def run_single(
 
     # ----------------------------------------------------------------
     # Build Pareto DataFrame  [accuracy, latency]
-    # pareto_front[:, 0] is stored as -accuracy (minimisation), fix here.
-    # pareto_set is 2D (n_solutions × n_vars); resolve each row to its
-    # scalar benchmark index via the problem's lookup helper.
     # ----------------------------------------------------------------
     acc = -pareto_front[:, 0]
     lat =  pareto_front[:, 1]

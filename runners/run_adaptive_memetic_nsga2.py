@@ -1,12 +1,9 @@
 # runners/run_adaptive_memetic_nsga2.py
 """
-Experiment runner for Memetic Adaptive NSGA-II (Contribution 3).
+Experiment runner for Memetic Adaptive NSGA-II.
 
 Combines uniform random local search (K-neighbour, rank-0 front) with
 the self-adaptive mutation pool (UCB1 operator selection).
-
-Identical structure to run_memetic_nsga2.py — the only difference is
-passing adaptive_mutation=ADAPTIVE_CONFIG to run_memetic().
 
 Output layout
 -------------
@@ -14,8 +11,8 @@ results/results_memetic_nsga2_adaptive/
   <dataset>/
     <device>/
       memetic_nsga2_adaptive_front.csv  # arch_index, accuracy, latency
-      comparison.png                    # scatter + metrics bar (vs ground truth)
-      edge_weights.csv                  # uniform placeholder from run_memetic()
+      comparison.png                    
+      edge_weights.csv                 
 
 results/results_memetic_nsga2_adaptive/ablation/
   <dataset>/
@@ -104,7 +101,7 @@ def run_single(
         dataset           = dataset,
         hw_platform       = device,
         pop_size          = 50,
-        n_gen             = 20,
+        n_gen             = 50,
         K                 = K,
         seed              = 42,
         verbose           = True,

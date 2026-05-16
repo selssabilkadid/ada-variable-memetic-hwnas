@@ -1,6 +1,5 @@
 """
 src/metaheuristic/archives.py
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 FHArchive  : Fixed-Hypergrid Archive (Patil 2020).
 CrowdingArchive : Bounded archive with crowding-distance elision.
 

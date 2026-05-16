@@ -1,9 +1,6 @@
-# experiments/run_variable_memetic_nsga2.py
+# runners/run_variable_memetic_nsga2.py
 """
-Experiment runner for Variance-Guided Memetic NSGA-II (Contribution 2).
-
-Mirrors run_memetic_nsga2.py exactly in structure: same datasets, same devices,
-same metrics (evaluation/metrics.py), same output layout.
+Runner for Variance-Guided Memetic NSGA-II (Contribution 2).
 
 Variance weights are loaded from data/variance_weights/ (precomputed once
 by running: python src/utils/variance_weights.py --dataset <dataset>).
@@ -100,12 +97,11 @@ def run_single(
         dataset      = dataset,
         hw_platform  = device,
         pop_size     = 50,
-        n_gen        = 20,
+        n_gen        = 50,
         K            = K,
         seed         = 42,
         verbose      = True,
         weights_dir  = WEIGHTS_DIR,
-        # adaptive_mutation=None → plain variance-guided mode (Contribution 2)
     )
 
     os.makedirs(output_dir, exist_ok=True)

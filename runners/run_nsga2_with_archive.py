@@ -1,6 +1,6 @@
 # runners/run_nsga2_with_archive.py
 """
-Experiment runner for NSGA-II with elitist archive (Contribution 4).
+Experiment runner for NSGA-II with elitist archive.
 
 Two archive variants per (dataset, device):
     fh       — Fixed-Hypergrid Archive (FHArchive)
@@ -8,9 +8,6 @@ Two archive variants per (dataset, device):
 
 Each variant can also be run with adaptive mutation (UCB1) by passing
 --adaptive on the command line.
-
-Mirrors run_memetic_nsga2.py exactly in structure: same datasets, same
-devices, same metrics (evaluation/metrics.py), same output layout.
 
 Output layout
 -------------
@@ -59,7 +56,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Config
 # ------------------------------------------------------------------ #
 
-POP_SIZE    = 100
+POP_SIZE    = 50
 GENERATIONS = 50
 SEED        = 42
 

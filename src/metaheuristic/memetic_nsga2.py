@@ -16,39 +16,7 @@ Two runners call this module:
   run_adaptive_memetic_nsga2.py (Contribution 3 — memetic + UCB1):
       run_memetic(..., adaptive_mutation={"initial_probs": ..., "update_period": ...})
 
-Usage
------
-from src.metaheuristic.memetic_nsga2 import run_memetic
 
-# Plain memetic (uniform local search only)
-results = run_memetic(
-    nb201_loader=nb201_loader,
-    hw_loader=hw_loader,
-    dataset="cifar10",
-    hw_platform="raspi4",
-    pop_size=50,
-    n_gen=20,
-    K=4,
-    seed=42,
-    verbose=True,
-)
-
-# Adaptive memetic (uniform local search + UCB1 operator selection)
-results = run_memetic(
-    nb201_loader=nb201_loader,
-    hw_loader=hw_loader,
-    dataset="cifar10",
-    hw_platform="raspi4",
-    pop_size=50,
-    n_gen=20,
-    K=4,
-    seed=42,
-    verbose=True,
-    adaptive_mutation={
-        "initial_probs": np.array([0.33, 0.33, 0.34]),
-        "update_period": 5,
-    },
-)
 """
 
 from __future__ import annotations

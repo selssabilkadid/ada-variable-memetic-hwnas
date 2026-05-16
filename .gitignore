@@ -33,3 +33,8 @@ results/
 .DS_Store
 
 .pytest_cache
+
+# tests
+tests/__pycache__/
+tests/*.pyc
+tests/*.pyo

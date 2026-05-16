@@ -23,15 +23,6 @@ Archive:
     FHArchive or CrowdingArchive (from src/metaheuristic/archives.py).
     Updated every generation with the current population before weights
     are recomputed, so weights reflect the latest non-dominated solutions.
-
-Two runners call this module:
-
-  run_variable_memetic_nsga2_archive.py  (plain, no UCB1):
-      run_memetic_archive(...) with default adaptive_mutation=None
-
-  run_adaptive_variable_memetic_nsga2_archive.py (UCB1 on top):
-      run_memetic_archive(..., adaptive_mutation={...})
-
 """
 
 from __future__ import annotations
@@ -75,12 +66,6 @@ def _compute_online_weights(
     -------
     weights : np.ndarray shape (n_var,), sum = 1.0
     """
-    # Collect decision_vars stored in archive members
-    # Both FHArchive and CrowdingArchive store (arch_idx, acc, lat) tuples
-    # in their internal structures. arch_idx here is the Individual object
-    # itself (we store id→vars mapping in the callback).
-    # The callback maintains a separate id→decision_vars dict for this purpose.
-    # This function is called with that dict passed as `var_store`.
     # ── see ArchiveVarCallback._compute_weights() which calls this ──────────
     raise NotImplementedError(
         "_compute_online_weights must be called via "

@@ -1,4 +1,4 @@
-# experiments/run_variable_memetic_nsga2_with_archive.py
+# runners/run_var_memetic_nsga2_with_archive.py
 """
 Experiment runner for Online Variance-Guided Memetic NSGA-II with Archive.
 
@@ -12,8 +12,6 @@ Two archive variants available via --archive flag:
 
 Adaptive mutation (UCB1) can be toggled via --adaptive.
 
-Mirrors run_variable_memetic_nsga2.py exactly in structure: same datasets,
-same devices, same metrics (evaluation/metrics.py), same output layout.
 
 Output layout
 -------------
@@ -148,7 +146,7 @@ def run_single(
         hw_platform       = device,
         archive           = make_archive(archive_type),
         pop_size          = 50,
-        n_gen             = 20,
+        n_gen             = 50,
         K                 = K,
         seed              = 42,
         verbose           = True,

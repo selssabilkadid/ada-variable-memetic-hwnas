@@ -1,13 +1,6 @@
 # runners/run_memetic_nsga2.py
 """
-Experiment runner for Memetic NSGA-II (Contribution 2).
-
-Mirrors run_nsga2.py exactly in structure: same datasets, same devices,
-same metrics (evaluation/metrics.py), same output layout.
-
-Local search inside memetic_nsga2.py is already purely random uniform
-(weights_dir is accepted but ignored by the implementation). This runner
-does not pass weights_dir or edge_weights.
+Experiment runner for Memetic NSGA-II.
 
 Output layout
 -------------
@@ -16,7 +9,7 @@ results/results_memetic_nsga2/
     <device>/
       memetic_nsga2_front.csv      # arch_index, accuracy, latency
       comparison.png               # scatter + metrics bar (vs ground truth)
-      edge_weights.csv             # uniform placeholder from run_memetic()
+      edge_weights.csv             
 
 results/results_memetic_nsga2/ablation/
   <dataset>/
@@ -100,7 +93,7 @@ def run_single(
         dataset      = dataset,
         hw_platform  = device,
         pop_size     = 50,
-        n_gen        = 20,
+        n_gen        = 50,
         K            = K,
         seed         = 42,
         verbose      = True,

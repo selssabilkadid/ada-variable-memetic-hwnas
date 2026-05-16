@@ -1,6 +1,6 @@
 """
 src/metaheuristic/nsga2_with_archive.py
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 NSGA-II with elitist archive injection.
 
 Uses the custom NSGA-II from src/metaheuristic/nsga2/core/nsga2.py — the
@@ -14,23 +14,6 @@ Archive callback steps (called every generation after survivor selection):
   1. Feed every individual in the current population into the archive.
   2. Inject up to pop_size // 10 archive members back into the population
      by replacing the worst-ranked / lowest-crowding-distance individuals.
-
-Public API
-----------
-run_nsga2_with_archive(
-    nb201_loader, hw_loader,
-    dataset, hw_platform,
-    archive=None,          # FHArchive | CrowdingArchive | None
-    pop_size, n_gen, seed, verbose,
-    adaptive_mutation=None,  # None → plain; dict → UCB1 (same as other runners)
-) -> dict
-
-Returned dict matches the contract of run_memetic / variable_memetic_nsga2:
-    pareto_X, pareto_acc, pareto_lat, F, pareto_set
-plus:
-    archive       : the archive object after the run
-    archive_df    : archive.to_dataframe()
-    history       : list[dict] — gen, pareto_front_size, archive_size
 """
 
 from __future__ import annotations
@@ -80,9 +63,6 @@ class ArchiveCallback:
 
         # ── 1. Feed current population into archive ───────────────────────
         for ind in population:
-            # decision_vars is the raw op-vector; derive arch_index as row key
-            # (same convention used in memetic_nsga2 — sequential index is fine
-            #  because the archive only needs a stable unique id per solution)
             arch_idx = id(ind)          # unique object id as surrogate key
             acc      = float(-ind.objectives[0])   # undo negation
             lat      = float(ind.objectives[1])
@@ -98,7 +78,6 @@ class ArchiveCallback:
             return
 
         # Collect archive candidates not already in population
-        # (by arch_idx surrogate key — new individuals always get new id())
         candidates_rows = archive_df.head(n_inject)   # archive is already non-dom
 
         # Identify worst individuals: highest rank, then lowest crowding dist
@@ -116,17 +95,13 @@ class ArchiveCallback:
         slots_to_replace = sorted_pop[:len(candidates_rows)]
 
         for slot, (_, row) in zip(slots_to_replace, candidates_rows.iterrows()):
-            # Re-build an Individual from the archive entry's stored objectives.
-            # We only need objectives here (local search already evaluated them);
-            # decision_vars are not stored in the archive so we use a placeholder
-            # that will be overwritten on the next crossover/mutation cycle.
+            
             acc_stored = float(row["accuracy"])
             lat_stored = float(row["latency"])
 
             new_obj = np.array([-acc_stored, lat_stored])   # back to min form
 
             # Replace worst individual's objectives in-place so the Individual
-            # object stays valid for the next generation's tournament selection.
             population[slot].objectives = new_obj
 
         # ── 3. Record history ─────────────────────────────────────────────
@@ -209,7 +184,7 @@ def run_nsga2_with_archive(
     archive_cb = ArchiveCallback(archive=archive, pop_size=pop_size)
 
     # ------------------------------------------------------------------
-    # Algorithm — same constructor as memetic_nsga2 / run_nsga2
+    # Algorithm 
     # ------------------------------------------------------------------
     algo = NSGA2(
         problem           = problem,
@@ -236,15 +211,13 @@ def run_nsga2_with_archive(
     )
 
     # ------------------------------------------------------------------
-    # Unpack results — same convention as memetic_nsga2.py
+    # Unpack results 
     # ------------------------------------------------------------------
     pareto_acc = -pareto_front[:, 0]
     pareto_lat =  pareto_front[:, 1]
     pareto_X   = np.arange(len(pareto_acc))
 
-    # Full final population objectives
-    # algo.history[-1]["objectives"] is already a (front_size, 2) ndarray
-    # of the best-front objectives — use pareto_front directly as F fallback
+
     F = algo.history[-1]["objectives"] if algo.history else pareto_front
 
     if verbose:
